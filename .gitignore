@@ -1,0 +1,28 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+
+# Production
+.next
+out
+build
+dist
+
+# Misc
+.DS_Store
+*.log
+*.swp
+*.swo
+*~
+
+# Environment
+.env.local
+.env.*.local
+
+# Claude Code (contains access tokens)
+.mcp.json
+.claude/settings.local.json
