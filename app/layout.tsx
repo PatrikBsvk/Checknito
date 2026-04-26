@@ -62,7 +62,38 @@ export default function RootLayout({
         <ThemeProvider>{children}</ThemeProvider>
         <script
           dangerouslySetInnerHTML={{
-            __html: `if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js").catch(() => {}); }`,
+            __html: `
+              if ("serviceWorker" in navigator) {
+                navigator.serviceWorker.register("/sw.js").then(function(reg) {
+                  // Při každém načtení stránky zkus zjistit, jestli je nová verze SW.
+                  // Když najde novou, prohlížeč ji stáhne a aktivuje (skipWaiting v sw.js).
+                  reg.update().catch(function(){});
+
+                  // Když nový SW skončí v "waiting" (např. na desktopu kde už běží tab),
+                  // pošli mu zprávu ať skipne čekání a převezme řízení.
+                  if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+                  reg.addEventListener("updatefound", function() {
+                    var nw = reg.installing;
+                    if (!nw) return;
+                    nw.addEventListener("statechange", function() {
+                      if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                        // Nová verze hotová — vynutíme reload aby uživatel hned dostal update.
+                        nw.postMessage("SKIP_WAITING");
+                      }
+                    });
+                  });
+                }).catch(function(){});
+
+                // Když se controller změní (nový SW převzal řízení), reloadni stránku
+                // — stará verze by jinak dál servírovala starou cached HTML.
+                var refreshing = false;
+                navigator.serviceWorker.addEventListener("controllerchange", function() {
+                  if (refreshing) return;
+                  refreshing = true;
+                  window.location.reload();
+                });
+              }
+            `,
           }}
         />
       </body>
