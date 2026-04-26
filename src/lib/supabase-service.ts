@@ -84,8 +84,10 @@ export async function getRecentTransmissions(onlyOwn: boolean = false, search?: 
 
 export async function createTransmission(data: {
   transmission_number: string;
+  model: string;
   operator_id: string;
-  completed_at: string;
+  completed_at: string | null;
+  carts_missing: boolean;
   has_errors: boolean;
   errors: string[];
   photo_left: string;

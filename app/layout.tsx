@@ -6,6 +6,11 @@ export const metadata: Metadata = {
   title: 'Checknito',
   description: 'PWA pro správu transmisí a eskalační feed',
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: 'Checknito',
+    statusBarStyle: 'black-translucent',
+  },
 };
 
 // Inline script to apply theme BEFORE React hydrates — avoids flash of wrong theme.
@@ -31,6 +36,11 @@ export default function RootLayout({
       <head>
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        {/* iOS PWA podpora — Safari nepoužívá manifest.json icons, potřebuje apple-touch-icon. */}
+        <link
+          rel="apple-touch-icon"
+          href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect fill='%230072CE' width='180' height='180' rx='38'/%3E%3Ctext x='50%25' y='50%25' font-size='100' fill='white' text-anchor='middle' dominant-baseline='central' font-family='Arial' font-weight='700'%3EC%3C/text%3E%3C/svg%3E"
+        />
         <link
           rel="preconnect"
           href="https://fonts.googleapis.com"

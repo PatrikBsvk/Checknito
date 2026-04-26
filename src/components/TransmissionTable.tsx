@@ -4,16 +4,46 @@ import { useState } from 'react';
 import { Transmission } from '@/src/types';
 import {
   deleteTransmission,
-  archiveTransmission,
   restoreTransmission,
 } from '@/src/lib/supabase-service';
 import Toast from './Toast';
+import Tooltip from './Tooltip';
 
 interface TransmissionTableProps {
   transmissions: Transmission[];
   isArchive?: boolean;
   onDelete: () => void;
 }
+
+// --- Ikony ----------------------------------------------------------------
+
+const IconTrash = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
+
+// --------------------------------------------------------------------------
+
+// V buňce: jen "HH:MM". V tooltipu (hover): celé datum + čas se sekundama.
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString('cs-CZ', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+const formatFull = (iso: string) =>
+  new Date(iso).toLocaleString('cs-CZ', {
+    day: 'numeric',
+    month: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 
 export default function TransmissionTable({
   transmissions,
@@ -24,30 +54,19 @@ export default function TransmissionTable({
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [modalImage, setModalImage] = useState<string | null>(null);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Opravdu smazat?')) return;
+  const handleDelete = async (tx: Transmission) => {
+    const label = tx.transmission_number
+      ? `transmisi ${tx.transmission_number}`
+      : 'tuto transmisi';
+    if (!confirm(`Opravdu chceš smazat ${label}? Tato akce je nevratná.`)) return;
     setIsLoading(true);
     try {
-      await deleteTransmission(id);
+      await deleteTransmission(tx.id);
       setToast({ type: 'success', message: 'Transmise smazána!' });
       onDelete();
     } catch (e) {
       console.error(e);
       setToast({ type: 'error', message: 'Chyba při mazání!' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleArchive = async (id: string) => {
-    setIsLoading(true);
-    try {
-      await archiveTransmission(id);
-      setToast({ type: 'success', message: 'Transmise archivována!' });
-      onDelete();
-    } catch (e) {
-      console.error(e);
-      setToast({ type: 'error', message: 'Chyba při archivování!' });
     } finally {
       setIsLoading(false);
     }
@@ -85,9 +104,11 @@ export default function TransmissionTable({
           <thead>
             <tr>
               <th>Číslo</th>
+              <th>Model</th>
               <th>Operátor</th>
+              <th>Typy vad</th>
               <th>Čas hotovo</th>
-              <th>Chyby</th>
+              <th>Uloženo</th>
               <th>Fotky</th>
               <th style={{ textAlign: 'right' }}>Akce</th>
             </tr>
@@ -98,51 +119,67 @@ export default function TransmissionTable({
                 <td>
                   <strong>{tx.transmission_number}</strong>
                 </td>
-                <td>{tx.operators?.name || <span style={{ color: 'var(--text-faint)' }}>—</span>}</td>
-                <td style={{ color: 'var(--text-muted)' }}>
-                  {new Date(tx.completed_at).toLocaleString('cs-CZ')}
+                <td>
+                  {tx.model ? (
+                    <span className="badge badge-model">{tx.model}</span>
+                  ) : (
+                    <span style={{ color: 'var(--text-faint)' }}>—</span>
+                  )}
                 </td>
+                <td>{tx.operators?.name || <span style={{ color: 'var(--text-faint)' }}>—</span>}</td>
                 <td>
                   {tx.has_errors ? (
-                    <span className="badge badge-error">
-                      Ano
-                      {Array.isArray(tx.errors) && tx.errors.length > 0 ? ` (${tx.errors.length})` : ''}
-                    </span>
+                    Array.isArray(tx.errors) && tx.errors.length > 0 ? (
+                      <Tooltip content={tx.errors.join('\n')}>
+                        <span className="badge badge-error">NOK</span>
+                      </Tooltip>
+                    ) : (
+                      <span className="badge badge-error">NOK</span>
+                    )
                   ) : (
-                    <span className="badge badge-success">Ne</span>
+                    <span className="badge badge-success">Ok</span>
                   )}
+                </td>
+                <td style={{ color: 'var(--text-muted)' }}>
+                  {tx.completed_at ? (
+                    <Tooltip content={formatFull(tx.completed_at)}>
+                      {formatTime(tx.completed_at)}
+                    </Tooltip>
+                  ) : (
+                    <Tooltip content="Vozíky v pořádku">
+                      <span className="badge badge-success">Vozíky OK</span>
+                    </Tooltip>
+                  )}
+                </td>
+                <td style={{ color: 'var(--text-muted)' }}>
+                  <Tooltip content={formatFull(tx.created_at)}>
+                    {formatTime(tx.created_at)}
+                  </Tooltip>
                 </td>
                 <td>
                   <div className="photo-thumbs">
                     {tx.photo_left && (
-                      <img
-                        src={tx.photo_left}
-                        alt="Levá"
-                        onClick={() => setModalImage(tx.photo_left)}
-                        title="Levá fotka"
-                      />
+                      <Tooltip content="Levá fotka">
+                        <img
+                          src={tx.photo_left}
+                          alt="Levá"
+                          onClick={() => setModalImage(tx.photo_left)}
+                        />
+                      </Tooltip>
                     )}
                     {tx.photo_right && (
-                      <img
-                        src={tx.photo_right}
-                        alt="Pravá"
-                        onClick={() => setModalImage(tx.photo_right)}
-                        title="Pravá fotka"
-                      />
+                      <Tooltip content="Pravá fotka">
+                        <img
+                          src={tx.photo_right}
+                          alt="Pravá"
+                          onClick={() => setModalImage(tx.photo_right)}
+                        />
+                      </Tooltip>
                     )}
                   </div>
                 </td>
                 <td>
                   <div className="action-buttons" style={{ justifyContent: 'flex-end' }}>
-                    {!isArchive && (
-                      <button
-                        onClick={() => handleArchive(tx.id)}
-                        className="btn-sm"
-                        disabled={isLoading}
-                      >
-                        Archivovat
-                      </button>
-                    )}
                     {isArchive && (
                       <button
                         onClick={() => handleRestore(tx.id)}
@@ -152,13 +189,16 @@ export default function TransmissionTable({
                         Obnovit
                       </button>
                     )}
-                    <button
-                      onClick={() => handleDelete(tx.id)}
-                      className="btn-sm btn-danger"
-                      disabled={isLoading}
-                    >
-                      Smazat
-                    </button>
+                    <Tooltip content="Smazat">
+                      <button
+                        onClick={() => handleDelete(tx)}
+                        className="btn-icon-danger"
+                        disabled={isLoading}
+                        aria-label="Smazat"
+                      >
+                        <IconTrash />
+                      </button>
+                    </Tooltip>
                   </div>
                 </td>
               </tr>

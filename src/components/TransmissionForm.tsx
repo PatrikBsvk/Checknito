@@ -1,26 +1,162 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Operator, ERROR_TYPES } from '@/src/types';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Operator,
+  ERROR_TYPES,
+  ErrorTypeCode,
+  Transmission,
+  TRANSMISSION_MODELS,
+  TransmissionModel,
+  formatErrorEntry,
+} from '@/src/types';
 import { addOperator, createTransmission, uploadPhoto } from '@/src/lib/supabase-service';
+import { compressImage } from '@/src/lib/image-compress';
 import Toast from './Toast';
 
 interface TransmissionFormProps {
   operators: Operator[];
   onSuccess: () => void;
+  /** Nejnovější transmise — použije se pro předvyplnění čísla (+1) a operátora. */
+  lastTransmission?: Transmission;
 }
+
+// --- Ikony ----------------------------------------------------------------
+
+const IconCamera = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+    <circle cx="12" cy="13" r="4" />
+  </svg>
+);
+
+const IconImage = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+);
+
+// -------- Sub-komponenta: input na fotku (Vyfotit vs. Z galerie) ---------
+//
+// Na mobilu `capture="environment"` otevře zadní foťák rovnou.
+// Na desktopu je `capture` ignorovaný → chová se jako klasický file picker,
+// takže bez speciálních větví funguje všude.
+
+interface PhotoInputProps {
+  label: string;
+  file: File | null;
+  onChange: (file: File) => void;
+  disabled?: boolean;
+}
+
+function PhotoInput({ label, file, onChange, disabled }: PhotoInputProps) {
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+
+  const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) onChange(f);
+    // reset value, aby šlo vybrat stejný soubor znovu (po chybě apod.)
+    e.target.value = '';
+  };
+
+  return (
+    <div className="form-group">
+      <label>{label} *</label>
+      <div className="photo-input-row">
+        <button
+          type="button"
+          className="btn-photo"
+          onClick={() => cameraRef.current?.click()}
+          disabled={disabled}
+          aria-label={`Vyfotit — ${label}`}
+        >
+          <IconCamera />
+          <span>Vyfotit</span>
+        </button>
+        <button
+          type="button"
+          className="btn-photo"
+          onClick={() => galleryRef.current?.click()}
+          disabled={disabled}
+          aria-label={`Z galerie — ${label}`}
+        >
+          <IconImage />
+          <span>Z galerie</span>
+        </button>
+      </div>
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handle}
+        disabled={disabled}
+        style={{ display: 'none' }}
+      />
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/jpeg,image/png"
+        onChange={handle}
+        disabled={disabled}
+        style={{ display: 'none' }}
+      />
+      {file && (
+        <small style={{ display: 'block', marginTop: '0.4rem', color: 'var(--text-muted)' }}>
+          ✓ {file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)
+        </small>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Vezme "T-12345" a vrátí "T-12346". Zvládá:
+ *   - prefix libovolného textu (T-, #, apod.)
+ *   - leading zeros (padStart zachová šířku)
+ * Pokud není žádné trailing číslo, vrací prázdný string (radši nic než blbost).
+ */
+const incrementNumber = (s: string): string => {
+  const match = s.match(/^(.*?)(\d+)$/);
+  if (!match) return '';
+  const [, prefix, digits] = match;
+  const width = digits.length;
+  const next = (Number(digits) + 1).toString().padStart(width, '0');
+  return `${prefix}${next}`;
+};
+
+/** Stav každého typu vady: zaškrtnuto + volitelná čísla svárů. */
+type ErrorSelection = { checked: boolean; numbers: string };
+type ErrorSelections = Record<ErrorTypeCode, ErrorSelection>;
+
+/** Prázdná struktura — všech 9 typů unchecked, žádná čísla. */
+const emptyErrorSelections = (): ErrorSelections => {
+  const obj = {} as ErrorSelections;
+  ERROR_TYPES.forEach((t) => {
+    obj[t.code] = { checked: false, numbers: '' };
+  });
+  return obj;
+};
 
 export default function TransmissionForm({
   operators,
   onSuccess,
+  lastTransmission,
 }: TransmissionFormProps) {
-  const [formData, setFormData] = useState({
-    transmission_number: '',
-    operator_id: '',
+  const [formData, setFormData] = useState(() => ({
+    transmission_number: lastTransmission
+      ? incrementNumber(lastTransmission.transmission_number)
+      : '',
+    model: '' as TransmissionModel | '',
+    operator_id: lastTransmission?.operator_id ?? '',
     completed_at: '',
+    carts_missing: false,
     has_errors: false,
-    errors: [] as string[],
-  });
+    errorSelections: emptyErrorSelections(),
+  }));
 
   const [files, setFiles] = useState<{ left: File | null; right: File | null }>({
     left: null,
@@ -84,27 +220,38 @@ export default function TransmissionForm({
     }
   };
 
-  const handleErrorToggle = (errorType: string) => {
+  const toggleErrorType = (code: ErrorTypeCode) => {
     setFormData((prev) => ({
       ...prev,
-      errors: prev.errors.includes(errorType)
-        ? prev.errors.filter((e) => e !== errorType)
-        : [...prev.errors, errorType],
+      errorSelections: {
+        ...prev.errorSelections,
+        [code]: {
+          ...prev.errorSelections[code],
+          checked: !prev.errorSelections[code].checked,
+        },
+      },
     }));
   };
 
-  const handleFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    side: 'left' | 'right'
-  ) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setToast({ type: 'error', message: 'Foto je větší než 5MB!' });
-        return;
-      }
-      setFiles((prev) => ({ ...prev, [side]: file }));
+  const setErrorNumbers = (code: ErrorTypeCode, numbers: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      errorSelections: {
+        ...prev.errorSelections,
+        [code]: { ...prev.errorSelections[code], numbers },
+      },
+    }));
+  };
+
+  const handleFilePicked = (file: File, side: 'left' | 'right') => {
+    // 25 MB horní strop — jen ochrana proti úplně šíleným souborům
+    // (RAW, 4K videa apod.). Normální fotka z mobilu má 2–8 MB a my
+    // ji během uploadu zkomprimujeme na ~500 kB.
+    if (file.size > 25 * 1024 * 1024) {
+      setToast({ type: 'error', message: 'Foto je větší než 25 MB!' });
+      return;
     }
+    setFiles((prev) => ({ ...prev, [side]: file }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -115,11 +262,16 @@ export default function TransmissionForm({
       setToast({ type: 'error', message: 'Zadejte číslo transmise!' });
       return;
     }
+    if (!formData.model) {
+      setToast({ type: 'error', message: 'Vyberte model!' });
+      return;
+    }
     if (!formData.operator_id) {
       setToast({ type: 'error', message: 'Vyberte operátora!' });
       return;
     }
-    if (!formData.completed_at) {
+    // Čas hotovo je povinný POUZE když jsou „Chybí vozíky" zaškrtnuté.
+    if (formData.carts_missing && !formData.completed_at) {
       setToast({ type: 'error', message: 'Zadejte čas hotovo!' });
       return;
     }
@@ -131,32 +283,64 @@ export default function TransmissionForm({
     setIsLoading(true);
 
     try {
-      const photoLeft = await uploadPhoto(files.left);
-      const photoRight = await uploadPhoto(files.right);
+      // Paralelní komprese obou fotek — každá se resizne na max 1600 px
+      // delší strany a re-enkóduje do JPEG q=0.82. Typická 6 MB fotka
+      // z mobilu skončí na ~500–800 kB.
+      const [leftCompressed, rightCompressed] = await Promise.all([
+        compressImage(files.left),
+        compressImage(files.right),
+      ]);
 
-      // completed_at uložíme jako dnešní datum + zadaný HH:MM čas.
-      // Pokud zadaný čas je v budoucnosti (např. zadám 23:30 v 23:45 dopoledne zítra),
-      // tak to prostě uloží dnešní den — odpovídá workflow "zadáváš co už jsi dělal/a dnes".
-      const [hours, minutes] = formData.completed_at.split(':').map(Number);
-      const completedDate = new Date();
-      completedDate.setHours(hours, minutes, 0, 0);
+      const [photoLeft, photoRight] = await Promise.all([
+        uploadPhoto(leftCompressed),
+        uploadPhoto(rightCompressed),
+      ]);
+
+      // Když chyběly vozíky → completed_at = dnešek + zadaný HH:MM.
+      // Jinak → null (všechno bylo v pořádku, čas odeslání už je v created_at).
+      let completedAtISO: string | null = null;
+      if (formData.carts_missing && formData.completed_at) {
+        const [hours, minutes] = formData.completed_at.split(':').map(Number);
+        const completedDate = new Date();
+        completedDate.setHours(hours, minutes, 0, 0);
+        completedAtISO = completedDate.toISOString();
+      }
+
+      // Serializace error selections → pole stringů pro DB.
+      // Jen checked typy; zachovává pořadí A..I.
+      const serializedErrors = formData.has_errors
+        ? ERROR_TYPES
+            .filter((t) => formData.errorSelections[t.code].checked)
+            .map((t) =>
+              formatErrorEntry(t.code, formData.errorSelections[t.code].numbers),
+            )
+        : [];
 
       await createTransmission({
-        ...formData,
-        completed_at: completedDate.toISOString(),
+        transmission_number: formData.transmission_number,
+        model: formData.model,
+        operator_id: formData.operator_id,
+        completed_at: completedAtISO,
+        carts_missing: formData.carts_missing,
+        has_errors: formData.has_errors,
+        errors: serializedErrors,
         photo_left: photoLeft,
         photo_right: photoRight,
       });
 
       setToast({ type: 'success', message: 'Transmise uložena!' });
 
-      setFormData({
-        transmission_number: '',
-        operator_id: '',
+      // Reset: číslo += 1, operátor zůstává (většinou dělá stejný dál).
+      // Model, chyby, vozíky a fotky vyprázdnit — ty se u každé transmise zadávají znovu.
+      setFormData((prev) => ({
+        transmission_number: incrementNumber(prev.transmission_number),
+        model: '',
+        operator_id: prev.operator_id,
         completed_at: '',
+        carts_missing: false,
         has_errors: false,
-        errors: [],
-      });
+        errorSelections: emptyErrorSelections(),
+      }));
       setFiles({ left: null, right: null });
 
       onSuccess();
@@ -185,6 +369,30 @@ export default function TransmissionForm({
             required
             disabled={isLoading}
           />
+        </div>
+
+        <div className="form-group">
+          <label>Model *</label>
+          <div className="model-toggle-group" role="radiogroup" aria-label="Model transmise">
+            {TRANSMISSION_MODELS.map((m) => {
+              const active = formData.model === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  className={`model-toggle ${active ? 'active' : ''}`}
+                  onClick={() =>
+                    setFormData((prev) => ({ ...prev, model: active ? '' : m }))
+                  }
+                  disabled={isLoading}
+                >
+                  {m}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="form-group">
@@ -284,22 +492,6 @@ export default function TransmissionForm({
         </div>
 
         <div className="form-group">
-          <label>Čas hotovo *</label>
-          <input
-            type="time"
-            name="completed_at"
-            value={formData.completed_at}
-            onChange={handleInputChange}
-            required
-            disabled={isLoading}
-            placeholder="HH:MM"
-          />
-          <small style={{ color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-            Datum se doplní automaticky podle času uložení.
-          </small>
-        </div>
-
-        <div className="form-group">
           <label className="checkbox-group">
             <input
               type="checkbox"
@@ -308,50 +500,88 @@ export default function TransmissionForm({
               onChange={handleInputChange}
               disabled={isLoading}
             />
-            <span>Byly chyby?</span>
+            <span>Typy vad?</span>
           </label>
         </div>
 
         {formData.has_errors && (
           <div className="error-list">
-            {ERROR_TYPES.map((errorType) => (
-              <div key={errorType} className="error-item">
-                <input
-                  type="checkbox"
-                  id={errorType}
-                  checked={formData.errors.includes(errorType)}
-                  onChange={() => handleErrorToggle(errorType)}
-                  disabled={isLoading}
-                />
-                <label htmlFor={errorType}>{errorType}</label>
-              </div>
-            ))}
+            {ERROR_TYPES.map((type) => {
+              const sel = formData.errorSelections[type.code];
+              return (
+                <div key={type.code} className="error-item">
+                  <label className="checkbox-group">
+                    <input
+                      type="checkbox"
+                      checked={sel.checked}
+                      onChange={() => toggleErrorType(type.code)}
+                      disabled={isLoading}
+                    />
+                    <span>
+                      {type.code}) {type.label}
+                    </span>
+                  </label>
+                  {sel.checked && (
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="čísla svárů, např. 4,5,10"
+                      value={sel.numbers}
+                      onChange={(e) => setErrorNumbers(type.code, e.target.value)}
+                      disabled={isLoading}
+                      className="error-numbers-input"
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
         <div className="form-group">
-          <label>Fotka levá *</label>
-          <input
-            type="file"
-            accept="image/jpeg,image/png"
-            onChange={(e) => handleFileChange(e, 'left')}
-            required
-            disabled={isLoading}
-          />
-          {files.left && <small>✓ {files.left.name}</small>}
+          <label className="checkbox-group">
+            <input
+              type="checkbox"
+              name="carts_missing"
+              checked={formData.carts_missing}
+              onChange={handleInputChange}
+              disabled={isLoading}
+            />
+            <span>Chybí vozíky?</span>
+          </label>
         </div>
 
-        <div className="form-group">
-          <label>Fotka pravá *</label>
-          <input
-            type="file"
-            accept="image/jpeg,image/png"
-            onChange={(e) => handleFileChange(e, 'right')}
-            required
-            disabled={isLoading}
-          />
-          {files.right && <small>✓ {files.right.name}</small>}
-        </div>
+        {formData.carts_missing && (
+          <div className="form-group">
+            <label>Čas hotovo *</label>
+            <input
+              type="time"
+              name="completed_at"
+              value={formData.completed_at}
+              onChange={handleInputChange}
+              required
+              disabled={isLoading}
+              placeholder="HH:MM"
+            />
+            <small style={{ color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+              Datum se doplní automaticky podle času uložení.
+            </small>
+          </div>
+        )}
+
+        <PhotoInput
+          label="Fotka levá"
+          file={files.left}
+          onChange={(f) => handleFilePicked(f, 'left')}
+          disabled={isLoading}
+        />
+
+        <PhotoInput
+          label="Fotka pravá"
+          file={files.right}
+          onChange={(f) => handleFilePicked(f, 'right')}
+          disabled={isLoading}
+        />
 
         <button
           type="submit"

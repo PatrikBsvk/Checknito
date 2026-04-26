@@ -5,6 +5,7 @@ import TransmissionTable from '@/src/components/TransmissionTable';
 import SearchBar from '@/src/components/SearchBar';
 import FilterToggle from '@/src/components/FilterToggle';
 import ExportButton from '@/src/components/ExportButton';
+import PageTitle from '@/src/components/PageTitle';
 import { Transmission } from '@/src/types';
 import { getTransmissions } from '@/src/lib/supabase-service';
 
@@ -35,7 +36,7 @@ export default function ArchivePage() {
     <div>
       <div className="page-header">
         <div>
-          <h1>Archiv</h1>
+          <PageTitle fallback="Archiv" />
           <p>Archivované transmise</p>
         </div>
         <ExportButton transmissions={transmissions} />

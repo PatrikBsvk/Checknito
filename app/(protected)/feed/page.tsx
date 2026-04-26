@@ -6,6 +6,7 @@ import TransmissionTable from '@/src/components/TransmissionTable';
 import SearchBar from '@/src/components/SearchBar';
 import FilterToggle from '@/src/components/FilterToggle';
 import ExportButton from '@/src/components/ExportButton';
+import PageTitle from '@/src/components/PageTitle';
 import { Transmission, Operator } from '@/src/types';
 import {
   getOperators,
@@ -61,12 +62,16 @@ export default function FeedPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1>Feed</h1>
+          <PageTitle fallback="Feed" />
           <p>Transmise za posledních 7 dní</p>
         </div>
       </div>
 
-      <TransmissionForm operators={operators} onSuccess={loadTransmissions} />
+      <TransmissionForm
+        operators={operators}
+        onSuccess={loadTransmissions}
+        lastTransmission={transmissions[0]}
+      />
 
       <div className="card">
         <div className="page-header" style={{ marginBottom: '1rem' }}>

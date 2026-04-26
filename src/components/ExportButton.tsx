@@ -14,24 +14,42 @@ export default function ExportButton({ transmissions }: ExportButtonProps) {
       return;
     }
 
-    const data = transmissions.map((tx) => ({
-      Číslo: tx.transmission_number,
-      Operátor: tx.operators?.name || 'N/A',
-      'Čas hotovo': new Date(tx.completed_at).toLocaleString('cs-CZ'),
-      Chyby: tx.has_errors ? 'Ano' : 'Ne',
-      Vytvořeno: new Date(tx.created_at).toLocaleString('cs-CZ'),
-    }));
+    const data = transmissions.map((tx) => {
+      // Zpoždění v minutách mezi completed_at (reálné hotovo) a created_at (odeslání).
+      // Má smysl jen když chyběly vozíky → completed_at je vyplněný.
+      let delayMinutes: number | string = '';
+      if (tx.completed_at) {
+        const diffMs = new Date(tx.created_at).getTime() - new Date(tx.completed_at).getTime();
+        delayMinutes = Math.round(diffMs / 60000);
+      }
+
+      return {
+        Číslo: tx.transmission_number,
+        Model: tx.model || '',
+        Operátor: tx.operators?.name || 'N/A',
+        'Chybí vozíky': tx.carts_missing ? 'Ano' : 'Ne',
+        'Čas hotovo': tx.completed_at
+          ? new Date(tx.completed_at).toLocaleString('cs-CZ')
+          : '',
+        'Zpoždění (min)': delayMinutes,
+        Chyby: tx.has_errors ? 'Ano' : 'Ne',
+        Vytvořeno: new Date(tx.created_at).toLocaleString('cs-CZ'),
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Transmise');
 
     worksheet['!cols'] = [
-      { wch: 12 },
-      { wch: 15 },
-      { wch: 20 },
-      { wch: 8 },
-      { wch: 20 },
+      { wch: 12 },   // Číslo
+      { wch: 10 },   // Model
+      { wch: 18 },   // Operátor
+      { wch: 12 },   // Chybí vozíky
+      { wch: 20 },   // Čas hotovo
+      { wch: 14 },   // Zpoždění
+      { wch: 8 },    // Chyby
+      { wch: 20 },   // Vytvořeno
     ];
 
     XLSX.writeFile(workbook, `transmise_${new Date().toISOString().split('T')[0]}.xlsx`);

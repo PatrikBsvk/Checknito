@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/src/lib/supabase';
 import Toast from '@/src/components/Toast';
@@ -12,7 +12,8 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const router = useRouter();
-  const supabase = createClient();
+  // Stabilní instance — aby useEffect nejezdil dokola při každém renderu.
+  const supabase = useMemo(() => createClient(), []);
 
   // Když už jsi přihlášený, rovnou odeženeme na feed
   useEffect(() => {
