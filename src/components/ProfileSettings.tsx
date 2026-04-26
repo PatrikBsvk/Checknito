@@ -5,13 +5,18 @@ import { createClient } from '@/src/lib/supabase';
 import { deriveDisplayName } from '@/src/lib/user';
 import Toast from './Toast';
 
+interface ProfileSettingsProps {
+  /** Pokud rodič potřebuje vědět o změně jména (např. aby aktualizoval sidebar). */
+  onNameChanged?: (newName: string) => void;
+}
+
 /**
  * Blok "Můj profil" v Nastavení — uživatel si tady může nastavit
  * zobrazované jméno (uloží se do Supabase user_metadata.display_name).
  *
  * Je přístupný VŠEM přihlášeným uživatelům, ne jen adminům.
  */
-export default function ProfileSettings() {
+export default function ProfileSettings({ onNameChanged }: ProfileSettingsProps = {}) {
   const supabase = useMemo(() => createClient(), []);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -56,11 +61,10 @@ export default function ProfileSettings() {
       });
       if (error) throw error;
       setInitialName(trimmed);
+      onNameChanged?.(trimmed);
       setToast({
         type: 'success',
-        message: trimmed
-          ? 'Jméno uloženo. Znovu načti stránku pro aktualizaci sidebaru.'
-          : 'Jméno odstraněno. Znovu načti stránku pro aktualizaci sidebaru.',
+        message: trimmed ? 'Jméno uloženo.' : 'Jméno odstraněno.',
       });
     } catch (err) {
       console.error('Error updating display name:', err);

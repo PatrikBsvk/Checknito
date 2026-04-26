@@ -30,8 +30,6 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/feed', label: 'Feed', icon: 'feed' },
-  { href: '/archive', label: 'Archiv', icon: 'archive' },
-  { href: '/settings', label: 'Nastavení', icon: 'settings', adminOnly: true },
 ];
 
 export default function ProtectedLayout({
@@ -172,6 +170,7 @@ export default function ProtectedLayout({
             <UserMenu
               displayName={displayName || userEmail}
               email={userEmail}
+              isAdmin={isAdmin}
               onLogout={handleLogout}
               onNameChanged={(newName) => {
                 // Když se jméno vymaže, spadneme zpět na odvozené z emailu

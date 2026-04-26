@@ -1016,18 +1016,68 @@ tbody tr:hover {
   }
 }
 
+/* Telefony — pod 600 px ladíme detail (typografie, mezery, single-column layouty) */
 @media (max-width: 600px) {
-  .filter-bar { flex-direction: column; align-items: stretch; }
-  .filter-bar input[type="text"] { min-width: 0; }
-  .page-header { flex-direction: column; align-items: flex-start; }
+  /* --- Layout ------------------------------------------------------------- */
+  .main { padding: 3.75rem 0.85rem 2rem; }
+
+  /* Karty: zmenšit vnitřní padding, ať se text vejde na malé displeje */
+  .card,
+  .form-section {
+    padding: 1rem;
+    border-radius: var(--radius-md);
+  }
+  .table-wrapper { border-radius: var(--radius-md); }
+
+  /* --- Typografie -------------------------------------------------------- */
+  h1 { font-size: 1.25rem; }
+  h2 { font-size: 1.05rem; }
+  .page-header h1 { font-size: 1.2rem; }
+
+  /* --- Header ------------------------------------------------------------ */
+  .page-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+
+  /* --- Filtr bar (search + toggle) -------------------------------------- */
+  .filter-bar { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+  .filter-bar input[type="text"] { min-width: 0; width: 100%; }
+  .toggle-group { width: 100%; }
+  .toggle-group button { flex: 1; }
+
+  /* --- Toast ------------------------------------------------------------- */
   .toast {
     bottom: 1rem;
     right: 1rem;
     left: 1rem;
     max-width: none;
   }
+
+  /* --- Tabulka (Feed/Archive/Operátoři) --------------------------------- */
   th, td { padding: 0.55rem 0.65rem; font-size: 0.8rem; }
   .action-buttons { gap: 0.25rem; }
+  .btn-sm { padding: 0.3rem 0.55rem; font-size: 0.75rem; }
+  .btn-icon-danger { width: 28px; height: 28px; }
+
+  /* --- Form pro transmisi ----------------------------------------------- */
+  .error-list {
+    grid-template-columns: 1fr;
+    padding: 0.75rem;
+  }
+
+  /* Photo upload buttons ať se vždycky stackují vertikálně na úzkých obrazovkách */
+  .photo-input-row { flex-direction: column; }
+  .btn-photo { flex: 1 1 auto; width: 100%; }
+
+  /* User menu — sidebar je 260 px, ale popup ať nepřesahuje */
+  .user-menu-popup { right: 0; left: 0; }
+}
+
+/* Velmi úzké telefony (pod 380 px) — agresivnější squeeze */
+@media (max-width: 380px) {
+  .main { padding: 3.5rem 0.6rem 2rem; }
+  .card, .form-section { padding: 0.85rem; }
+  .page-header h1 { font-size: 1.1rem; }
+  th, td { padding: 0.45rem 0.5rem; font-size: 0.75rem; }
+  .btn-sm { padding: 0.3rem 0.5rem; font-size: 0.72rem; }
 }
 
 /* =========================================================
@@ -1552,6 +1602,112 @@ tbody tr:hover {
   height: 1px;
   background: var(--border-subtle);
   margin: 2px 6px;
+}
+
+/* =========================================================
+   Settings modal — popup z UserMenu (Profil + Operátoři)
+   ========================================================= */
+.settings-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: settings-fade-in 0.18s ease;
+}
+
+@keyframes settings-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.settings-modal {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: settings-pop-in 0.2s ease;
+}
+
+@keyframes settings-pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.settings-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.settings-modal-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.settings-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.settings-modal-close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.settings-modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* H2 uvnitř modalu už hlavičku má — sekce uvnitř ať nejsou tak velké */
+.settings-modal-body .form-section h2 {
+  font-size: 1rem;
+}
+
+@media (max-width: 600px) {
+  .settings-modal-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+  .settings-modal {
+    max-width: none;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+  .settings-modal-body {
+    padding: 1rem;
+  }
 }
 
 /* -------- Photo input (Vyfotit / Z galerie) --------------------------- */

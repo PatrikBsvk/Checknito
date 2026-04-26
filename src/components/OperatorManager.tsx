@@ -20,10 +20,19 @@ export default function OperatorManager({
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Když parent dodá nové operátory (např. po refreshOperators po otevření modalu),
+  // sesyncujeme lokální seznam.
+  useEffect(() => {
+    setOperators(initialOperators);
+  }, [initialOperators]);
+
   useEffect(() => {
     const subscription = subscribeToOperators(
       (newOperator) => {
-        setOperators((prev) => [...prev, newOperator]);
+        // Dedup: pokud jsme operátora už přidali optimisticky po insertu, neduplikuj ho
+        setOperators((prev) =>
+          prev.some((op) => op.id === newOperator.id) ? prev : [...prev, newOperator]
+        );
       },
       (id) => {
         setOperators((prev) => prev.filter((op) => op.id !== id));
@@ -49,7 +58,12 @@ export default function OperatorManager({
     setIsLoading(true);
 
     try {
-      await addOperator({ name, personal_number: personal_number || null });
+      const newOp = await addOperator({ name, personal_number: personal_number || null });
+      // Optimisticky přidat do lokálního seznamu — uživatel vidí změnu hned,
+      // bez nutnosti čekat na realtime postgres_changes (které někdy nestihne).
+      setOperators((prev) =>
+        prev.some((op) => op.id === newOp.id) ? prev : [...prev, newOp]
+      );
       setToast({ type: 'success', message: 'Operátor přidán!' });
       setNewOperatorName('');
       setNewOperatorNumber('');
