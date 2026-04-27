@@ -1727,16 +1727,20 @@ tbody tr:hover {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .btn-photo {
-  flex: 1 1 120px;
+  /* Tlačítka se NEROZTAHUJÍ na celou šířku formu — zůstanou kompaktní vlevo.
+   * `flex: 0 0 auto` = neroste, neshrne se, šířka podle obsahu + padding. */
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  min-height: 40px;
-  padding: 0.45rem 0.7rem;
+  min-height: 38px;
+  min-width: 120px;
+  padding: 0.45rem 0.85rem;
   background: var(--bg-sunken);
   color: var(--text);
   border: 1px solid var(--border);
