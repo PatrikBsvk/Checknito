@@ -23,17 +23,20 @@ export default function ExportButton({ transmissions }: ExportButtonProps) {
         delayMinutes = Math.round(diffMs / 60000);
       }
 
+      // Časy do Excelu vždy v pražském čase, bez ohledu na timezone exportujícího stroje.
+      const tzOpts: Intl.DateTimeFormatOptions = { timeZone: 'Europe/Prague' };
+
       return {
         Číslo: tx.transmission_number,
         Model: tx.model || '',
         Operátor: tx.operators?.name || 'N/A',
         'Chybí vozíky': tx.carts_missing ? 'Ano' : 'Ne',
         'Čas hotovo': tx.completed_at
-          ? new Date(tx.completed_at).toLocaleString('cs-CZ')
+          ? new Date(tx.completed_at).toLocaleString('cs-CZ', tzOpts)
           : '',
         'Zpoždění (min)': delayMinutes,
         Chyby: tx.has_errors ? 'Ano' : 'Ne',
-        Vytvořeno: new Date(tx.created_at).toLocaleString('cs-CZ'),
+        Vytvořeno: new Date(tx.created_at).toLocaleString('cs-CZ', tzOpts),
       };
     });
 

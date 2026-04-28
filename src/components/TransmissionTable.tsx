@@ -29,10 +29,14 @@ const IconTrash = () => (
 // --------------------------------------------------------------------------
 
 // V buňce: jen "HH:MM". V tooltipu (hover): celé datum + čas se sekundama.
+// `timeZone: 'Europe/Prague'` je klíčový — bez něj se čas zobrazí podle
+// timezone stroje (telefon/PC) na kterém prohlížeč běží. Tohle drží
+// pražský čas konzistentně bez ohledu na nastavení zařízení.
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString('cs-CZ', {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Europe/Prague',
   });
 
 const formatFull = (iso: string) =>
@@ -43,6 +47,7 @@ const formatFull = (iso: string) =>
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
+    timeZone: 'Europe/Prague',
   });
 
 export default function TransmissionTable({
